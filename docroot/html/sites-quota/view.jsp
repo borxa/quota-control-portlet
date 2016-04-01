@@ -1,6 +1,6 @@
 <%
 /**
- * Copyright (c) 2013 Liferay Spain User Group All rights reserved.
+ * Copyright (c) 2013-present Liferay Spain User Group All rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the Free
@@ -14,41 +14,91 @@
  */
 %>
 
-<%@ include file="/html/sites-quota/init.jsp"%>
+<%@ include file="/html/common/init.jsp" %>
 
-<%
-String orderByCol = ParamUtil.getString(request, "orderByCol", "quotaUsed");
-String orderByType = ParamUtil.getString(request, "orderByType", "desc");
+<liferay-portlet:renderURL var="portletURL">
+	<portlet:param name="tabs2" value="${tabs2}" />
+</liferay-portlet:renderURL>
 
-Quota companyQuota = QuotaUtil.getCompanyQuota(companyId);
-%>
+<liferay-ui:error key="assignedQuotaLessThanCurrent" message="assigned-quota-less-than-current" />
 
-<liferay-ui:message key="sites-quota-description" />
+<liferay-ui:tabs names="sites,user-sites" param="tabs2" url="${portletURL}" />
 
-<c:if test="<%= companyQuota != null %>">
-	<liferay-ui:message key="used-space" />
+<liferay-ui:search-container searchContainer="${searchContainer}">
 
-	<%= companyQuota.getQuotaUsed() %>
+	<liferay-ui:search-container-results results="${searchContainer.getResults()}" total="${searchContainer.getTotal()}" />
 
-	<liferay-ui:message key="assigned-space" />
+	<liferay-ui:search-container-row className="org.lsug.quota.model.Quota" keyProperty="quotaId"
+	modelVar="quota" escapedModel="<%= true %>">
 
-	<%= companyQuota.getQuotaAssigned() %>
+	<liferay-ui:search-container-column-text name="site-name">
+
+		<%= GroupLocalServiceUtil.getGroup(quota.getClassPK()).getDescriptiveName(locale) %>
+
+	</liferay-ui:search-container-column-text>
+
+	<liferay-ui:search-container-column-text name="quota-enabled">
+		<c:if test="${quota.enabled}">
+			<liferay-ui:message key="yes" />
+		</c:if>
+
+		<c:if test="${!quota.enabled}">
+			<liferay-ui:message key="no" />
+		</c:if>
+	</liferay-ui:search-container-column-text>
+
+	<liferay-ui:search-container-column-text name="quota-alert"
+		value="${quota.getQuotaAlert()}" />
+
+	<liferay-ui:search-container-column-text name="quota-assigned" orderable="true"
+		orderableProperty="quotaAssigned">
+
+		<fmt:formatNumber maxFractionDigits="0" value="${quota.getQuotaAssigned() / 1024 / 1024}" var="quotaAssigned" />
+		<c:out value="${quotaAssigned}"></c:out> MB
+
+	</liferay-ui:search-container-column-text>
+
+	<liferay-ui:search-container-column-text name="quota-used" orderable="true"
+		orderableProperty="quotaUsed">
+
+		<fmt:formatNumber maxFractionDigits="3" value="${quota.getQuotaUsed() / 1024 / 1024}" var="quotaUsed" />
+		<c:out value="${quotaUsed}"></c:out> MB (<%= quota.getQuotaUsedPercentage() %>%)
+
+	</liferay-ui:search-container-column-text>
+
+	<liferay-ui:search-container-column-text name="edit">
+
+		<portlet:renderURL var="editURL">
+			<portlet:param name="mvcPath" value="/html/sites-quota/edit.jsp" />
+			<portlet:param name="quotaId" value="${quota.getQuotaId()}" />
+			<portlet:param name="tabs2" value="${tabs2}" />
+		</portlet:renderURL>
+
+		<liferay-ui:icon image="edit" url="${editURL}" />
+
+	</liferay-ui:search-container-column-text>
+
+	</liferay-ui:search-container-row>
+
+	<liferay-ui:search-iterator />
+
+</liferay-ui:search-container>
+
+<% String tabs2 = (String) renderRequest.getAttribute("tabs2"); %>
+<c:if test='<%= tabs2.equals(\"sites\") %>'>
+
+	<portlet:resourceURL var="siteQuotaURL">
+		<portlet:param name="type" value="sites"/>
+	</portlet:resourceURL>
+
+	<img src="<%= siteQuotaURL %>" />
 </c:if>
 
-<liferay-ui:search-container delta="5" orderByCol="<%= orderByCol %>" orderByType="<%= orderByType %>">
-	<liferay-ui:search-container-results>
+<c:if test ='<%= tabs2.equals(\"user-sites\") %>'>
 
-		<%
-		results = null;
-		total = 0;
-		pageContext.setAttribute("results", results);
-		pageContext.setAttribute("total", total);
-		%>
+	<portlet:resourceURL var="userSiteQuotaURL">
+		<portlet:param name="type" value="users"/>
+	</portlet:resourceURL>
 
-	</liferay-ui:search-container-results>
-	<liferay-ui:search-container-row className="org.lsug.quota.model.Quota" keyProperty="quotaId" modelVar="quota">
-		<liferay-ui:search-container-column-text name="quotaAlert" value="<%= String.valueOf(quota.getQuotaAlert()) %>" />
-		<liferay-ui:search-container-column-text name="quotaAssigned" value="<%= String.valueOf(quota.getQuotaAssigned()) %>" />
-		<liferay-ui:search-container-column-text name="quotaUsed" value="<%= String.valueOf(quota.getQuotaUsed()) %>" />
-	</liferay-ui:search-container-row>
-</liferay-ui:search-container>
+	<img src="<%= userSiteQuotaURL %>" />
+</c:if>

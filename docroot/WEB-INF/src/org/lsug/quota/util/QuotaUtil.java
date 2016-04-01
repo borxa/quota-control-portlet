@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2013 Liferay Spain User Group All rights reserved.
+ * Copyright (c) 2013-present Liferay Spain User Group All rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the Free
@@ -14,91 +14,102 @@
 
 package org.lsug.quota.util;
 
-import org.lsug.quota.NoSuchQuotaException;
-import org.lsug.quota.QuotaExceededException;
-import org.lsug.quota.model.Quota;
-import org.lsug.quota.service.QuotaLocalServiceUtil;
-
-import com.liferay.portal.kernel.exception.PortalException;
-import com.liferay.portal.kernel.exception.SystemException;
-import com.liferay.portal.model.Company;
+import com.liferay.portal.kernel.language.LanguageUtil;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.util.ArrayUtil;
+import com.liferay.portal.kernel.util.JavaConstants;
+import com.liferay.portal.kernel.util.OrderByComparator;
 import com.liferay.portal.model.Group;
-import com.liferay.portal.service.CompanyLocalServiceUtil;
-import com.liferay.portal.service.GroupLocalServiceUtil;
-import com.liferay.portal.util.PortalUtil;
+import com.liferay.portal.model.Organization;
+import com.liferay.portal.model.User;
 
+import java.text.MessageFormat;
+import java.util.Locale;
+import java.util.ResourceBundle;
+
+import javax.portlet.PortletConfig;
+import javax.portlet.PortletRequest;
+import javax.servlet.jsp.PageContext;
+
+import org.lsug.quota.util.comparator.QuotaAssignedComparator;
+import org.lsug.quota.util.comparator.QuotaEnabledComparator;
+import org.lsug.quota.util.comparator.QuotaUsedComparator;
+
+/**
+ * Utils class for multiple operations
+ * @author LSUG
+ *
+ */
 public class QuotaUtil {
 
-	public static void decreaseQuota(long groupId, long userId, long size)
-			throws PortalException, SystemException, NoSuchQuotaException,
-			QuotaExceededException {
+	public static final String[] validClassNames = {User.class.getName(), Group.class.getName(), Organization.class.getName()};
 
-		final Group group = GroupLocalServiceUtil.getGroup(groupId);
-		final Company company = CompanyLocalServiceUtil.getCompany(group
-				.getCompanyId());
+	public static OrderByComparator getQuotaOrderByComparator(
+			String orderByCol, String orderByType) {
 
-		QuotaLocalServiceUtil.decrementQuota(
-				PortalUtil.getClassNameId(Group.class), group.getClassPK(),
-				size);
+		boolean orderByAsc = false;
 
-		QuotaLocalServiceUtil.decrementQuota(
-				PortalUtil.getClassNameId(Company.class),
-				company.getCompanyId(), size);
+		if (orderByType.equals("asc")) {
+			orderByAsc = true;
+		}
+
+		OrderByComparator orderByComparator = null;
+
+		if (orderByCol.equals("quotaUsed")) {
+			orderByComparator = new QuotaUsedComparator(orderByAsc);
+		} else if (orderByCol.equals("quotaAssigned")) {
+			orderByComparator = new QuotaAssignedComparator(orderByAsc);
+		} else if (orderByCol.equals("quotaStatus")) {
+			orderByComparator = new QuotaEnabledComparator(orderByAsc);
+		}
+
+		return orderByComparator;
 	}
 
-	public static void increaseQuota(long groupId, long userId, long size)
-			throws PortalException, SystemException {
-
-		final Group group = GroupLocalServiceUtil.getGroup(groupId);
-		final Company company = CompanyLocalServiceUtil.getCompany(group
-				.getCompanyId());
-
-		QuotaLocalServiceUtil.decrementQuota(
-				PortalUtil.getClassNameId(Group.class), group.getClassPK(),
-				size);
-
-		QuotaLocalServiceUtil.decrementQuota(
-				PortalUtil.getClassNameId(Company.class),
-				company.getCompanyId(), size);
+	public static String getResource(Locale locale, String key, Object... arguments) {
+		String text = ResourceBundle.getBundle("content.Language", locale).getString(key);
+		return MessageFormat.format(text, arguments);
 	}
 
-	public static boolean hasQuota(long groupId, long userId, long size)
-			throws PortalException, SystemException {
-
-		final Quota groupQuota = getGroupQuota(groupId);
-		final Quota companyQuota = getCompanyQuota(groupId);
-
-		return groupQuota.hasFreeMB(size) && companyQuota.hasFreeMB(size);
+	public static String getResource(PageContext pageContext, String key) {
+		return LanguageUtil.get(pageContext, key);
 	}
 
-	public static boolean checkAlerts(long groupId, long userId)
-			throws PortalException, SystemException {
-
-		Quota groupQuota = getGroupQuota(groupId);
-		Quota companyQuota = getCompanyQuota(groupId);
-
-		return groupQuota.isExceeded() || companyQuota.isExceeded();
+	public static String getResource(PortletRequest portletRequest, String key) {
+		PortletConfig portletConfig = (PortletConfig)portletRequest.getAttribute(JavaConstants.JAVAX_PORTLET_CONFIG);
+		return LanguageUtil.get(portletConfig, portletRequest.getLocale(), key);
 	}
 
-	private static Quota getCompanyQuota(long groupId) throws PortalException,
-			SystemException {
-
-		final Group group = GroupLocalServiceUtil.getGroup(groupId);
-		final Company company = CompanyLocalServiceUtil.getCompany(group
-				.getCompanyId());
-
-		return QuotaLocalServiceUtil.getQuotaByClassNameIdClassPK(
-				PortalUtil.getClassNameId(Company.class),
-				company.getCompanyId());
+	public static String getResource(PortletRequest portletRequest, String key, Object... arguments) {
+		PortletConfig portletConfig = (PortletConfig)portletRequest.getAttribute(JavaConstants.JAVAX_PORTLET_CONFIG);
+		return LanguageUtil.format(portletConfig, portletRequest.getLocale(), key, arguments);
 	}
 
-	private static Quota getGroupQuota(long groupId) throws PortalException,
-			SystemException {
+	public static boolean isValidGroupQuota(Group group) {
 
-		final Group group = GroupLocalServiceUtil.getGroup(groupId);
+		String className = group.getClassName();
 
-		return QuotaLocalServiceUtil.getQuotaByClassNameIdClassPK(
-				PortalUtil.getClassNameId(Group.class), group.getClassPK());
+		if (LOGGER.isDebugEnabled()){
+			LOGGER.debug("Checking group validity for quota, group:" + group.toString() + ",className:" + className + ",is site:"+group.isSite()+",is staging group:"+group.isStagingGroup());
+		}
+				
+		if (!ArrayUtil.contains(validClassNames, className)) {
+			return false;
+		}
+
+		if (!group.isSite() && !User.class.getName().equals(className)) {
+			return false;
+		}
+
+		if (group.isStagingGroup()) {
+			return false;
+		}
+
+		return true;
 	}
 
+	private static final transient Log LOGGER = LogFactoryUtil
+			.getLog(QuotaUtil.class);
+	
 }
